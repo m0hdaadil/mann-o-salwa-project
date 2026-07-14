@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Mann O Salwa QR table ordering, restaurant menu, reviews, and dine-in checkout in Nizamabad.">
+    <title>Mann O Salwa | QR Restaurant Ordering</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="Mann O Salwa home">
+        <img src="/assets/logo.jpg" alt="Mann O Salwa logo">
+        <span id="brandName">Mann O Salwa</span>
+      </a>
+      <nav>
+        <a href="#menu">Menu</a>
+        <a href="#reviews">Reviews</a>
+        <a href="#visit">Visit</a>
+        <a href="/admin">Admin</a>
+      </nav>
+    </header>
+
+    <main>
+      <section id="home" class="hero">
+        <div class="hero-media">
+          <img id="heroImage" src="/assets/images (1).jpg" alt="Premium restaurant menu spread">
+        </div>
+        <div class="hero-copy">
+          <p class="eyebrow">QR dine-in ordering</p>
+          <h1 id="heroTitle">Mann O Salwa</h1>
+          <p class="lead">Fresh shawarma, broasted chicken, burgers, curries, desserts, and fast table service from Bodhan Road.</p>
+          <div class="hero-actions">
+            <a class="button primary" href="#menu">Order Now</a>
+            <a class="button ghost" target="_blank" rel="noreferrer" id="mapLink">Open Maps</a>
+          </div>
+          <div class="quick-facts">
+            <span id="hoursText">10 AM to 11 PM</span>
+            <span>Table <strong id="tableBadge">walk-in</strong></span>
+            <span>Instant kitchen dashboard</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section about-strip" id="about">
+        <div>
+          <p class="eyebrow">Premium QR service</p>
+          <h2>Guests order faster. Staff manage every table from one dashboard.</h2>
+        </div>
+        <p>Browse the live menu, add available items to cart, and send your order directly to the restaurant dashboard without page reloads.</p>
+      </section>
+
+      <section class="section menu-section" id="menu">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Digital menu</p>
+            <h2>Choose your favourites</h2>
+          </div>
+          <label class="search">
+            <span>Search</span>
+            <input id="searchInput" type="search" placeholder="shawarma, burger, rice...">
+          </label>
+        </div>
+        <div class="category-row" id="categoryRow" aria-label="Menu categories"></div>
+        <div class="menu-grid" id="menuGrid"></div>
+      </section>
+
+      <section class="section reviews" id="reviews">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Guest reviews</p>
+            <h2>What guests say</h2>
+          </div>
+          <div class="rating-summary" id="ratingSummary"></div>
+        </div>
+        <div class="review-grid" id="reviewGrid"></div>
+        <form class="review-form" id="reviewForm" novalidate>
+          <h3>Share your experience</h3>
+          <input name="name" required placeholder="Your name" autocomplete="name">
+          <select name="rating" required>
+            <option value="5">5 stars ★★★★★</option>
+            <option value="4">4 stars ★★★★☆</option>
+            <option value="3">3 stars ★★★☆☆</option>
+            <option value="2">2 stars ★★☆☆☆</option>
+            <option value="1">1 star ★☆☆☆☆</option>
+          </select>
+          <textarea name="text" required placeholder="Write your review (minimum 10 characters)" minlength="10"></textarea>
+          <button class="button primary" type="submit" id="reviewSubmitBtn">Submit Review</button>
+        </form>
+      </section>
+
+      <section class="section visit" id="visit">
+        <div>
+          <p class="eyebrow">Visit</p>
+          <h2>Bodhan Road, Nizamabad</h2>
+          <p id="addressText"></p>
+        </div>
+        <div class="visit-actions">
+          <a class="button primary" id="callLink" href="tel:6300770073">Call Restaurant</a>
+          <a class="button ghost" id="instaLink" target="_blank" rel="noreferrer">Instagram</a>
+        </div>
+      </section>
+    </main>
+
+    <div class="cart-backdrop" id="cartBackdrop"></div>
+    <aside class="cart" aria-label="Order cart">
+      <div class="cart-head">
+        <div>
+          <p class="eyebrow">Your table order</p>
+          <h2>Cart</h2>
+        </div>
+        <button class="icon-button" id="closeCart" aria-label="Close cart">✕</button>
+      </div>
+      <div id="cartItems" class="cart-items"></div>
+      <form id="checkoutForm" class="checkout">
+        <label>
+          Name
+          <input id="customerName" required placeholder="Your name" autocomplete="name">
+        </label>
+        <label>
+          Table
+          <input id="tableInput" required placeholder="Table number">
+        </label>
+        <div class="total-row">
+          <span>Total</span>
+          <strong id="cartTotal">Rs 0</strong>
+        </div>
+        <button class="button primary wide" id="checkoutButton" type="submit">Place Order</button>
+      </form>
+    </aside>
+
+    <!-- Floating cart bar — hidden when empty -->
+    <div class="cart-bar" id="cartBar" hidden>
+      <button class="cart-bar-btn" id="openCart" aria-label="Open cart">
+        <span class="cart-bar-icon">🛒</span>
+        <span class="cart-bar-label">Cart</span>
+        <span class="cart-bar-sep">·</span>
+        <span class="cart-bar-items" id="cartBarItems">0 Items</span>
+        <span class="cart-bar-sep">·</span>
+        <span class="cart-bar-total" id="cartBarTotal">Rs 0</span>
+        <span class="cart-bar-cta">View →</span>
+      </button>
+      <span id="cartCount" hidden>0</span>
+    </div>
+
+    <div class="customer-toast" id="customerToast" aria-live="polite" role="status"></div>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

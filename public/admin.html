@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mann O Salwa Admin</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body class="admin-body">
+    <main class="admin-shell">
+      <section class="login-panel" id="loginPanel">
+        <p class="eyebrow">Owner dashboard</p>
+        <h1>Mann O Salwa Admin</h1>
+        <p>Sign in with your owner account to manage menu, orders, reviews, QR codes, and restaurant settings.</p>
+        <form id="loginForm">
+          <input id="email" type="text" required autocomplete="username" placeholder="Username or email">
+          <input id="password" type="password" required placeholder="Password">
+          <button class="button primary wide" type="submit">Login</button>
+        </form>
+      </section>
+
+      <section id="dashboardPanel" hidden>
+        <div class="admin-top">
+          <div>
+            <p class="eyebrow">Secure dashboard</p>
+            <h1>Mann O Salwa</h1>
+          </div>
+          <div class="admin-actions">
+            <a class="button ghost small" href="/" target="_blank">View site</a>
+            <button class="button ghost small" id="printQr">Print QR</button>
+            <button class="button primary small" id="logout">Logout</button>
+          </div>
+        </div>
+
+        <div class="tabs" id="tabs">
+          <button class="tab active" data-tab="overview">Overview</button>
+          <button class="tab" data-tab="orders">Orders</button>
+          <button class="tab" data-tab="menuAdmin">Menu</button>
+          <button class="tab" data-tab="reviewsAdmin">Reviews</button>
+          <button class="tab" data-tab="qr">QR Codes</button>
+          <button class="tab" data-tab="analytics">Analytics</button>
+          <button class="tab" data-tab="settings">Settings</button>
+        </div>
+
+        <div class="toast" id="toast" hidden></div>
+        <section class="admin-section active" id="overview"></section>
+        <section class="admin-section" id="orders"></section>
+        <section class="admin-section" id="menuAdmin"></section>
+        <section class="admin-section" id="reviewsAdmin"></section>
+        <section class="admin-section" id="qr"></section>
+        <section class="admin-section" id="analytics"></section>
+        <section class="admin-section" id="settings"></section>
+      </section>
+    </main>
+    <script src="/admin.js" type="module"></script>
+  </body>
+</html>
