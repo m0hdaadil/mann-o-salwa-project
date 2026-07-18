@@ -9,6 +9,8 @@
   },
   "description": "Mann O Salwa QR ordering website and admin dashboard",
   "dependencies": {
+    "dotenv": "^17.4.2",
+    "mongodb": "^7.5.0",
     "qrcode": "^1.5.4"
   }
 }

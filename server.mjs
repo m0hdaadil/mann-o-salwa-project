@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+import { MongoClient } from "mongodb";
+dotenv.config();
 import { createServer } from "node:http";
 import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import { createReadStream } from "node:fs";
@@ -19,6 +22,21 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "";
 const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH || "";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 const ORDER_STATUSES = ["Pending", "Accepted", "Preparing", "Ready", "Completed", "Cancelled"];
+// MongoDB Connection
+const mongoClient = new MongoClient(process.env.MONGODB_URI);
+
+let mongoDb;
+
+async function connectMongo() {
+  try {
+    await mongoClient.connect();
+    mongoDb = mongoClient.db("mann_o_salwa");
+    console.log("✅ MongoDB Connected");
+  } catch (err) {
+    console.error("❌ MongoDB Connection Failed");
+    console.error(err);
+  }
+}
 
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -386,6 +404,11 @@ function buildDashboard(db, filter = "today") {
 
 async function api(req, res, url) {
   const db = await readDb();
+  db.orders = await mongoDb
+  .collection("orders")
+  .find({})
+  .sort({ createdAt: -1 })
+  .toArray();
 
   if (req.method === "GET" && url.pathname === "/api/qr") {
     const table = String(url.searchParams.get("table") || "").replace(/[^\w-]/g, "");
@@ -436,9 +459,8 @@ async function api(req, res, url) {
       total: validItems.reduce((sum, item) => sum + item.price * item.qty, 0),
       status: "Pending",
       createdAt: new Date().toISOString()
-    };
-    db.orders.unshift(order);
-    await writeDb(db);
+    };await mongoDb.collection("orders").insertOne(order);
+    
     return json(res, 201, { order });
   }
 
@@ -475,15 +497,27 @@ async function api(req, res, url) {
     if (req.method === "GET" && url.pathname === "/api/admin/dashboard") {
       return json(res, 200, buildDashboard(db, url.searchParams.get("range") || "today"));
     }
-    if (req.method === "PUT" && url.pathname.startsWith("/api/admin/orders/")) {
-      const id = decodeURIComponent(url.pathname.split("/").pop());
-      const body = await readBody(req);
-      const order = db.orders.find(o => o.id === id);
-      if (!order) return json(res, 404, { error: "Order not found" });
-      order.status = normalizeStatus(body.status || order.status);
-      await writeDb(db);
-      return json(res, 200, { order });
+   if (req.method === "PUT" && url.pathname.startsWith("/api/admin/orders/")) {
+  const id = decodeURIComponent(url.pathname.split("/").pop());
+  const body = await readBody(req);
+
+  const status = normalizeStatus(body.status);
+
+  await mongoDb.collection("orders").updateOne(
+    { id },
+    {
+      $set: { status }
     }
+  );
+
+  const order = await mongoDb.collection("orders").findOne({ id });
+
+  if (!order) {
+    return json(res, 404, { error: "Order not found" });
+  }
+
+  return json(res, 200, { order });
+}
     if (req.method === "POST" && url.pathname === "/api/admin/items") {
       const item = cleanItem(await readBody(req));
       if (!item.name || !item.categoryId) return json(res, 400, { error: "Item name and category are required" });
@@ -567,6 +601,8 @@ async function serveStatic(req, res, url) {
 }
 
 await ensureDb();
+await connectMongo();
+
 createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {

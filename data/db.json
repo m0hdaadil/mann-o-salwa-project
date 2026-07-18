@@ -720,6 +720,23 @@
     }
   ],
   "orders": [
+    {
+      "id": "MS-MRQT2VNN",
+      "customerName": "no",
+      "table": "2",
+      "items": [
+        {
+          "id": "chicken-regular-burger",
+          "name": "Chicken Regular Burger",
+          "price": 70,
+          "qty": 1,
+          "categoryId": "burgers"
+        }
+      ],
+      "total": 70,
+      "status": "Completed",
+      "createdAt": "2026-07-17T20:14:56.963Z"
+    }
   ],
   "reviews": [
     {
