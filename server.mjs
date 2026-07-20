@@ -38,6 +38,35 @@ async function connectMongo() {
   }
 }
 
+
+
+
+// 👇 ISKE NICHE PASTE KARO
+
+async function migrateDbToMongo() {
+  
+
+  await mongoDb.collection("settings").deleteMany({});
+  await mongoDb.collection("admin").deleteMany({});
+  await mongoDb.collection("categories").deleteMany({});
+  await mongoDb.collection("items").deleteMany({});
+  await mongoDb.collection("reviews").deleteMany({});
+
+  await mongoDb.collection("settings").insertOne(db.settings);
+  await mongoDb.collection("admin").insertOne(db.admin);
+
+  if (db.categories.length)
+    await mongoDb.collection("categories").insertMany(db.categories);
+
+  if (db.items.length)
+    await mongoDb.collection("items").insertMany(db.items);
+
+  if (db.reviews.length)
+    await mongoDb.collection("reviews").insertMany(db.reviews);
+
+  console.log("✅ Migration Completed");
+}
+
 const mime = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -410,6 +439,31 @@ async function api(req, res, url) {
   .sort({ createdAt: -1 })
   .toArray();
 
+db.settings = await mongoDb.collection("settings").findOne({});
+
+db.admin = await mongoDb.collection("admin").findOne({});
+
+db.categories = await mongoDb
+  .collection("categories")
+  .find({})
+  .sort({ order: 1 })
+  .toArray();
+
+db.items = await mongoDb
+  .collection("items")
+  .find({})
+  .sort({ order: 1 })
+  .toArray();
+
+db.reviews = await mongoDb
+  .collection("reviews")
+  .find({})
+  .sort({ createdAt: -1 })
+  .toArray();  
+
+  
+
+
   if (req.method === "GET" && url.pathname === "/api/qr") {
     const table = String(url.searchParams.get("table") || "").replace(/[^\w-]/g, "");
     const target = `${url.origin}/menu?table=${encodeURIComponent(table || "1")}`;
@@ -518,27 +572,47 @@ async function api(req, res, url) {
 
   return json(res, 200, { order });
 }
-    if (req.method === "POST" && url.pathname === "/api/admin/items") {
-      const item = cleanItem(await readBody(req));
-      if (!item.name || !item.categoryId) return json(res, 400, { error: "Item name and category are required" });
-      db.items.unshift(item);
-      await writeDb(db);
-      return json(res, 201, { item });
+   if (req.method === "POST" && url.pathname === "/api/admin/items") {
+  const item = cleanItem(await readBody(req));
+
+  if (!item.name || !item.categoryId) {
+    return json(res, 400, {
+      error: "Item name and category are required"
+    });
+  }
+
+  await mongoDb.collection("items").insertOne(item);
+
+  return json(res, 201, { item });
+}
+    
+      if (req.method === "PUT" && url.pathname.startsWith("/api/admin/items/")) {
+  const id = decodeURIComponent(url.pathname.split("/").pop());
+
+  const existing = await mongoDb.collection("items").findOne({ id });
+
+  if (!existing) {
+    return json(res, 404, { error: "Item not found" });
+  }
+
+  const updated = cleanItem({
+    ...existing,
+    ...(await readBody(req)),
+    id
+  });
+
+  await mongoDb.collection("items").updateOne(
+    { id },
+    {
+      $set: updated
     }
-    if (req.method === "PUT" && url.pathname.startsWith("/api/admin/items/")) {
-      const id = decodeURIComponent(url.pathname.split("/").pop());
-      const index = db.items.findIndex(item => item.id === id);
-      if (index === -1) return json(res, 404, { error: "Item not found" });
-      db.items[index] = cleanItem({ ...db.items[index], ...(await readBody(req)), id });
-      await writeDb(db);
-      return json(res, 200, { item: db.items[index] });
-    }
-    if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/items/")) {
-      const id = decodeURIComponent(url.pathname.split("/").pop());
-      db.items = db.items.filter(item => item.id !== id);
-      await writeDb(db);
-      return json(res, 200, { ok: true });
-    }
+  );
+
+  return json(res, 200, {
+    item: updated
+  });
+}
+   
     if (req.method === "POST" && url.pathname === "/api/admin/categories") {
       const body = await readBody(req);
       const category = { id: body.id || body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"), name: body.name, order: Number(body.order || db.categories.length + 1) };
@@ -546,15 +620,21 @@ async function api(req, res, url) {
       await writeDb(db);
       return json(res, 201, { category });
     }
-    if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/categories/")) {
+    
+    if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/items/")) {
       const id = decodeURIComponent(url.pathname.split("/").pop());
-      const hasItems = db.items.some(item => item.categoryId === id);
-      if (hasItems) return json(res, 400, { error: "Cannot delete category because it still contains menu items." });
-      const idx = db.categories.findIndex(c => c.id === id);
-      if (idx === -1) return json(res, 404, { error: "Category not found." });
-      db.categories.splice(idx, 1);
-      await writeDb(db);
-      return json(res, 200, { ok: true });
+
+      const result = await mongoDb.collection("items").deleteOne({ id });
+
+      if (result.deletedCount === 0) {
+       return json(res, 404, {
+       error: "Item not found"
+       });
+     }
+
+      return json(res, 200, {
+        ok: true
+      });
     }
     if (req.method === "PUT" && url.pathname === "/api/admin/settings") {
       db.settings = { ...db.settings, ...(await readBody(req)) };
@@ -602,6 +682,7 @@ async function serveStatic(req, res, url) {
 
 await ensureDb();
 await connectMongo();
+
 
 createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
