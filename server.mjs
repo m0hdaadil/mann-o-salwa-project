@@ -2,8 +2,8 @@ import dotenv from "dotenv";
 import { MongoClient } from "mongodb";
 dotenv.config();
 import { createServer } from "node:http";
-import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -165,26 +165,7 @@ const seed = {
   ]
 };
 
-async function ensureDb() {
-  await mkdir(dataDir, { recursive: true });
-  try {
-    await stat(dbPath);
-    const db = JSON.parse(await readFile(dbPath, "utf8"));
-    const migrated = migrateDb(db);
-    if (migrated.changed) await writeFile(dbPath, JSON.stringify(migrated.db, null, 2));
-  } catch {
-    await writeFile(dbPath, JSON.stringify(migrateDb(seed).db, null, 2));
-  }
-}
 
-async function readDb() {
-  await ensureDb();
-  return JSON.parse(await readFile(dbPath, "utf8"));
-}
-
-async function writeDb(db) {
-  await writeFile(dbPath, JSON.stringify(db, null, 2));
-}
 
 function hashPassword(password, salt = randomBytes(16).toString("hex")) {
   const hash = scryptSync(String(password), salt, 64).toString("hex");
@@ -200,14 +181,25 @@ function verifyPassword(password, stored) {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-function verifyAdminLogin(body, db) {
+async function verifyAdminLogin(body) {
   const email = String(body.email || "").trim();
   const password = String(body.password || "");
+
   if (ADMIN_EMAIL && (ADMIN_PASSWORD_HASH || ADMIN_PASSWORD)) {
     const stored = ADMIN_PASSWORD_HASH || hashPassword(ADMIN_PASSWORD);
     return email === ADMIN_EMAIL && verifyPassword(password, stored);
   }
-  return email === db.admin.email && verifyPassword(password, db.admin.passwordHash || db.admin.password);
+
+  const admin = await mongoDb.collection("admin").findOne({ email });
+
+  if (!admin) {
+    return false;
+  }
+
+  return verifyPassword(
+    password,
+    admin.passwordHash || admin.password
+  );
 }
 
 function normalizeStatus(status) {
@@ -226,12 +218,12 @@ function normalizeStatus(status) {
 
 function defaultImageFor(categoryId) {
   const map = {
-    shawarma: "/assets/logo.jpg",
-    starters: "/assets/menu-curry-starters.png",
-    burgers: "/assets/menu-burgers.png",
-    curry: "/assets/menu-curry-starters.png",
-    broasted: "/assets/images.jpg",
-    desserts: "/assets/images (1).jpg"
+    shawarma: "/assets/sh.jpg",
+    starters: "/assets/stat.jpg",
+    burgers: "/assets/bur.jpg",
+    curry: "/assets/curries.jpg",
+    broasted: "/assets/bro chi.jpg",
+    desserts: "/assets/des.jpg" 
   };
   return map[categoryId] || "/assets/logo.jpg";
 }
@@ -240,7 +232,7 @@ function migrateDb(db) {
   let changed = false;
   db.settings = {
     logo: "/assets/logo.jpg",
-    heroBanner: "/assets/images (1).jpg",
+    heroBanner: "/assets/main.jpg",
     openingHours: "10:00",
     closingHours: "23:00",
     themeColor: "#d8aa45",
@@ -432,34 +424,34 @@ function buildDashboard(db, filter = "today") {
 }
 
 async function api(req, res, url) {
-  const db = await readDb();
+  const db = {};
   db.orders = await mongoDb
   .collection("orders")
   .find({})
   .sort({ createdAt: -1 })
   .toArray();
 
-db.settings = await mongoDb.collection("settings").findOne({});
+  db.settings = await mongoDb.collection("settings").findOne({});
 
-db.admin = await mongoDb.collection("admin").findOne({});
+  db.admin = await mongoDb.collection("admin").findOne({});
 
-db.categories = await mongoDb
-  .collection("categories")
-  .find({})
-  .sort({ order: 1 })
-  .toArray();
+  db.categories = await mongoDb
+    .collection("categories")
+    .find({})
+    .sort({ order: 1 })
+    .toArray();
 
-db.items = await mongoDb
-  .collection("items")
-  .find({})
-  .sort({ order: 1 })
-  .toArray();
+  db.items = await mongoDb
+    .collection("items")
+    .find({})
+    .sort({ order: 1 })
+    .toArray();
 
-db.reviews = await mongoDb
-  .collection("reviews")
-  .find({})
-  .sort({ createdAt: -1 })
-  .toArray();  
+  db.reviews = await mongoDb
+    .collection("reviews")
+    .find({})
+    .sort({ createdAt: -1 })
+    .toArray();  
 
   
 
@@ -533,14 +525,17 @@ db.reviews = await mongoDb
       featured: false,
       createdAt: new Date().toISOString()
     };
-    db.reviews.unshift(review);
-    await writeDb(db);
-    return json(res, 201, { review });
+    await mongoDb.collection("reviews").insertOne(review);
+
+    return json(res, 201, {
+      review
+    });
   }
 
   if (req.method === "POST" && url.pathname === "/api/auth/login") {
     const body = await readBody(req);
-    if (verifyAdminLogin(body, db)) {
+
+    if (await verifyAdminLogin(body)) {
       return json(res, 200, { token: sign({ email: body.email, exp: Date.now() + 1000 * 60 * 60 * 12 }) });
     }
     return json(res, 401, { error: "Invalid login" });
@@ -552,73 +547,81 @@ db.reviews = await mongoDb
       return json(res, 200, buildDashboard(db, url.searchParams.get("range") || "today"));
     }
    if (req.method === "PUT" && url.pathname.startsWith("/api/admin/orders/")) {
-  const id = decodeURIComponent(url.pathname.split("/").pop());
-  const body = await readBody(req);
+    const id = decodeURIComponent(url.pathname.split("/").pop());
+    const body = await readBody(req);
 
-  const status = normalizeStatus(body.status);
+    const status = normalizeStatus(body.status);
 
-  await mongoDb.collection("orders").updateOne(
-    { id },
-    {
-      $set: { status }
+    await mongoDb.collection("orders").updateOne(
+      { id },
+      {
+        $set: { status }
+      }
+    );
+
+    const order = await mongoDb.collection("orders").findOne({ id });
+
+    if (!order) {
+      return json(res, 404, { error: "Order not found" });
     }
-  );
 
-  const order = await mongoDb.collection("orders").findOne({ id });
-
-  if (!order) {
-    return json(res, 404, { error: "Order not found" });
+    return json(res, 200, { order });
   }
-
-  return json(res, 200, { order });
-}
    if (req.method === "POST" && url.pathname === "/api/admin/items") {
-  const item = cleanItem(await readBody(req));
+    const item = cleanItem(await readBody(req));
 
-  if (!item.name || !item.categoryId) {
-    return json(res, 400, {
-      error: "Item name and category are required"
+    if (!item.name || !item.categoryId) {
+      return json(res, 400, {
+        error: "Item name and category are required"
+      });
+    }
+
+    await mongoDb.collection("items").insertOne(item);
+
+    return json(res, 201, { item });
+  }
+    
+  if (req.method === "PUT" && url.pathname.startsWith("/api/admin/items/")) {
+    const id = decodeURIComponent(url.pathname.split("/").pop());
+
+    const existing = await mongoDb.collection("items").findOne({ id });
+
+    if (!existing) {
+      return json(res, 404, { error: "Item not found" });
+    }
+
+    const updated = cleanItem({
+      ...existing,
+      ...(await readBody(req)),
+      id
+    });
+
+    await mongoDb.collection("items").updateOne(
+      { id },
+      {
+        $set: updated
+      }
+    );
+
+    return json(res, 200, {
+      item: updated
     });
   }
-
-  await mongoDb.collection("items").insertOne(item);
-
-  return json(res, 201, { item });
-}
     
-      if (req.method === "PUT" && url.pathname.startsWith("/api/admin/items/")) {
-  const id = decodeURIComponent(url.pathname.split("/").pop());
-
-  const existing = await mongoDb.collection("items").findOne({ id });
-
-  if (!existing) {
-    return json(res, 404, { error: "Item not found" });
-  }
-
-  const updated = cleanItem({
-    ...existing,
-    ...(await readBody(req)),
-    id
-  });
-
-  await mongoDb.collection("items").updateOne(
-    { id },
-    {
-      $set: updated
-    }
-  );
-
-  return json(res, 200, {
-    item: updated
-  });
-}
-   
     if (req.method === "POST" && url.pathname === "/api/admin/categories") {
-      const body = await readBody(req);
-      const category = { id: body.id || body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"), name: body.name, order: Number(body.order || db.categories.length + 1) };
-      db.categories.push(category);
-      await writeDb(db);
-      return json(res, 201, { category });
+       const body = await readBody(req);
+
+       const category = {
+          id: body.id || body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          name: body.name,
+          order: Number(body.order || db.categories.length + 1)
+        };
+
+        await mongoDb.collection("categories").insertOne(category);
+
+        return json(res, 201, {
+          category
+      });
     }
     
     if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/items/")) {
@@ -636,29 +639,92 @@ db.reviews = await mongoDb
         ok: true
       });
     }
-    if (req.method === "PUT" && url.pathname === "/api/admin/settings") {
-      db.settings = { ...db.settings, ...(await readBody(req)) };
-      await writeDb(db);
-      return json(res, 200, { settings: db.settings });
-    }
-    if (req.method === "PUT" && url.pathname.startsWith("/api/admin/reviews/")) {
+    if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/categories/")) {
       const id = decodeURIComponent(url.pathname.split("/").pop());
-      const review = db.reviews.find(entry => entry.id === id);
-      if (!review) return json(res, 404, { error: "Review not found" });
-      Object.assign(review, await readBody(req));
-      await writeDb(db);
-      return json(res, 200, { review });
-    }
-    if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/reviews/")) {
-      const id = decodeURIComponent(url.pathname.split("/").pop());
-      db.reviews = db.reviews.filter(review => review.id !== id);
-      await writeDb(db);
-      return json(res, 200, { ok: true });
-    }
-  }
 
+      const hasItems = await mongoDb.collection("items").findOne({
+        categoryId: id
+      });
+
+      if (hasItems) {
+        return json(res, 400, {
+          error: "Cannot delete category because it still contains menu items."
+       });
+      }
+
+      const result = await mongoDb.collection("categories").deleteOne({ id });
+
+      if (result.deletedCount === 0) {
+        return json(res, 404, {
+          error: "Category not found."
+        });
+      }
+
+      return json(res, 200, {
+        ok: true
+      });
+    }
+
+    if (req.method === "PUT" && url.pathname === "/api/admin/settings") {
+      const updates = await readBody(req);
+
+      const settings = {
+        ...db.settings,
+        ...updates
+      };
+
+      await mongoDb.collection("settings").replaceOne(
+        {},
+        settings,
+        { upsert: true }
+      );
+
+      return json(res, 200, {
+        settings
+      });
+    }
+  if (req.method === "PUT" && url.pathname.startsWith("/api/admin/reviews/")) {
+    const id = decodeURIComponent(url.pathname.split("/").pop());
+
+    const updates = await readBody(req);
+
+    await mongoDb.collection("reviews").updateOne(
+      { id },
+      {
+        $set: updates
+      }
+    );
+
+    const review = await mongoDb.collection("reviews").findOne({ id });
+
+    if (!review) {
+      return json(res, 404, {
+        error: "Review not found"
+      });
+    }
+
+    return json(res, 200, {
+      review
+    });
+
+  }
+  if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/reviews/")) {
+    const id = decodeURIComponent(url.pathname.split("/").pop());
+
+    await mongoDb.collection("reviews").deleteOne({
+      id
+    });
+
+    return json(res, 200, {
+      ok: true
+    });
+  }
   json(res, 404, { error: "Not found" });
 }
+}
+
+
+
 
 async function serveStatic(req, res, url) {
   let pathname = decodeURIComponent(url.pathname);
@@ -666,6 +732,8 @@ async function serveStatic(req, res, url) {
   if (pathname === "/menu") pathname = "/index.html";
   if (pathname === "/admin") pathname = "/admin.html";
   const file = normalize(join(publicDir, pathname));
+
+  
   if (!file.startsWith(publicDir)) {
     res.writeHead(403);
     return res.end("Forbidden");
@@ -674,15 +742,19 @@ async function serveStatic(req, res, url) {
     await stat(file);
     res.writeHead(200, { "Content-Type": mime[extname(file)] || "application/octet-stream" });
     createReadStream(file).pipe(res);
-  } catch {
-    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+  } 
+  catch (err) {
+    
+    res.writeHead(404, {
+      "Content-Type": "text/plain; charset=utf-8"
+    });
+
     res.end("Not found");
   }
 }
 
-await ensureDb();
-await connectMongo();
 
+await connectMongo();
 
 createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);

@@ -10,12 +10,12 @@ const state = {
 };
 
 const fallbackImages = {
-  shawarma: "/assets/logo.jpg",
-  starters: "/assets/menu-curry-starters.png",
-  burgers: "/assets/menu-burgers.png",
-  curry: "/assets/menu-curry-starters.png",
-  broasted: "/assets/images.jpg",
-  desserts: "/assets/images (1).jpg"
+  shawarma: "/assets/sh.jpg",
+  starters: "/assets/stat.jpg",
+  burgers: "/assets/bur.jpg",
+  curry: "/assets/curries.jpg",
+  broasted: "/assets/bro chi.jpg",
+  desserts: "/assets/des.jpg"
 };
 
 const rupee = value => `Rs ${Number(value || 0).toLocaleString("en-IN")}`;
@@ -71,7 +71,7 @@ async function load() {
     el("instaLink").href = state.settings.instagram || "#";
     el("addressText").textContent = state.settings.address || "";
     el("hoursText").textContent = state.settings.hours || "";
-    el("heroImage").src = state.settings.heroBanner || "/assets/images (1).jpg";
+    el("heroImage").src = state.settings.heroBanner || "/assets/main.jpg";
     if (state.settings.phone) el("callLink").href = `tel:${state.settings.phone}`;
 
     loadCartFromStorage();
