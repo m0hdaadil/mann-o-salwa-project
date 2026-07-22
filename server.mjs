@@ -182,24 +182,36 @@ function verifyPassword(password, stored) {
 }
 
 async function verifyAdminLogin(body) {
+  
   const email = String(body.email || "").trim();
   const password = String(body.password || "");
-
-  if (ADMIN_EMAIL && (ADMIN_PASSWORD_HASH || ADMIN_PASSWORD)) {
-    const stored = ADMIN_PASSWORD_HASH || hashPassword(ADMIN_PASSWORD);
-    return email === ADMIN_EMAIL && verifyPassword(password, stored);
-  }
 
   const admin = await mongoDb.collection("admin").findOne({ email });
 
   if (!admin) {
-    return false;
+    return {
+      success: false,
+      error: "Email is not registered with Mann O Salwa."
+    };
   }
 
-  return verifyPassword(
+  const valid = verifyPassword(
     password,
     admin.passwordHash || admin.password
   );
+
+  if (!valid) {
+    return {
+      success: false,
+      error: "Incorrect password."
+    };
+  }
+
+  return {
+    success: true
+  };
+
+
 }
 
 function normalizeStatus(status) {
@@ -535,10 +547,20 @@ async function api(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/auth/login") {
     const body = await readBody(req);
 
-    if (await verifyAdminLogin(body)) {
-      return json(res, 200, { token: sign({ email: body.email, exp: Date.now() + 1000 * 60 * 60 * 12 }) });
-    }
-    return json(res, 401, { error: "Invalid login" });
+    const result = await verifyAdminLogin(body);
+
+      if (!result.success) {
+        return json(res, 401, {
+          error: result.error
+        });
+      }
+
+      return json(res, 200, {
+        token: sign({
+          email: body.email,
+          exp: Date.now() + 1000 * 60 * 60 * 12
+        })
+      });
   }
 
   if (url.pathname.startsWith("/api/admin")) {

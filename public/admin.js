@@ -38,7 +38,8 @@ async function login(event) {
       body: JSON.stringify({ email: el("email").value, password: el("password").value })
     });
     if (!res.ok) {
-      showToast("Invalid email or password.", "error");
+      const err = await res.json();
+      showToast(err.error, "error");
       return;
     }
     const data = await res.json();
@@ -87,11 +88,26 @@ function startRefresh() {
 let toastTimer = null;
 function showToast(message, type = "success") {
   const toast = el("toast");
+
   toast.textContent = message;
   toast.className = `toast toast--${type}`;
+
+  toast.style.display = "block";
+  toast.style.position = "fixed";
+  toast.style.top = "20px";
+  toast.style.right = "20px";
+  toast.style.zIndex = "999999";
+  toast.style.background = "#dc2626";
+  toast.style.color = "#fff";
+  toast.style.padding = "14px 20px";
+  toast.style.borderRadius = "10px";
+
   toast.hidden = false;
+
   if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toast.hidden = true; }, 3800);
+  toastTimer = setTimeout(() => {
+    toast.hidden = true;
+  }, 3800);
 }
 
 function renderAll() {
@@ -284,15 +300,20 @@ function renderMenuAdmin() {
 
   // Existing item image uploads
   el("menuAdmin").querySelectorAll("[data-upload]").forEach(input => {
-    input.addEventListener("change", async event => {
-      const image = await readImageInput(event.currentTarget);
-      if (!image) return;
-      const id = event.currentTarget.dataset.upload;
-      el("menuAdmin").querySelector(`[data-preview="${id}"]`).src = image;
-      el("menuAdmin").querySelector(`[data-id="${id}"][data-field="image"]`).value = image;
-      showToast("Image preview ready. Click Save to keep it.");
-    });
+  input.addEventListener("change", async (event) => {
+
+    const inputEl = event.currentTarget;   // <-- PEHLE STORE KARO
+    const id = inputEl.dataset.upload;     // <-- PEHLE STORE KARO
+
+    const image = await readImageInput(inputEl);
+    if (!image) return;
+
+    el("menuAdmin").querySelector(`[data-preview="${id}"]`).src = image;
+    el("menuAdmin").querySelector(`[data-id="${id}"][data-field="image"]`).value = image;
+
+    showToast("Image preview ready. Click Save to keep it.");
   });
+});
 
   el("menuAdmin").querySelectorAll("[data-save]").forEach(btn => btn.addEventListener("click", () => saveItem(btn.dataset.save)));
   el("menuAdmin").querySelectorAll("[data-delete]").forEach(btn => btn.addEventListener("click", () => deleteItem(btn.dataset.delete)));
